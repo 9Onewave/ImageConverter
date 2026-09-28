@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image converter</title>
+<meta name="description" content="Convert HEIC, PNG, WebP, GIF and other images to JPG or another format. Runs in your browser, nothing is uploaded.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B7A75'/%3E%3Cpath d='M9 13V9h4M23 13V9h-4M9 19v4h4M23 19v4h-4' stroke='white' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F2F4F7;
+    --surface: #FFFFFF;
+    --ink: #101828;
+    --muted: #5B6675;
+    --line: #E1E5EB;
+    --line-strong: #CBD2DB;
+    --accent: #0B7A75;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #E3F3F1;
+    --danger: #B42318;
+    --warn: #8A5A00;
+    --warn-soft: #FFF3D6;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0C1116;
+      --surface: #141B22;
+      --ink: #EDF1F5;
+      --muted: #98A3B1;
+      --line: #232D37;
+      --line-strong: #33404C;
+      --accent: #3CCBB4;
+      --accent-ink: #04211D;
+      --accent-soft: #0F2E2A;
+      --danger: #FF8A80;
+      --warn: #F5C563;
+      --warn-soft: #33270C;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: clamp(24px, 6vw, 64px) 20px 72px; }
+
+  header { display: flex; align-items: center; gap: 14px; }
+  .mark { width: 40px; height: 40px; flex: none; }
+  h1 {
+    margin: 0;
+    font-size: clamp(1.7rem, 4.5vw, 2.25rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .lede { margin: 14px 0 28px; max-width: 56ch; color: var(--muted); }
+
+  /* Options */
+  .options { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; margin-bottom: 8px; }
+  .group { display: flex; align-items: center; gap: 12px; }
+  .group > .label { font-weight: 600; font-size: .95rem; }
+  .seg {
+    display: inline-flex; gap: 2px; padding: 3px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  }
+  .seg label { position: relative; display: block; }
+  .seg input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .seg span {
+    display: block; padding: 8px 14px; border-radius: 9px;
+    font-weight: 600; font-size: .92rem; color: var(--muted);
+    transition: background .15s, color .15s;
+  }
+  .seg input:hover:not(:checked):not(:disabled) + span { color: var(--ink); }
+  .seg input:checked + span { background: var(--accent); color: var(--accent-ink); }
+  .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .seg input:disabled { cursor: not-allowed; }
+  .seg input:disabled + span { opacity: .4; }
+
+  .quality input[type=range] { width: 150px; accent-color: var(--accent); }
+  .quality output { min-width: 3ch; font-weight: 600; font-size: .95rem; }
+  .hint { margin: 0 0 20px; min-height: 1.5em; font-size: .9rem; color: var(--muted); }
+
+  /* Drop box */
+  .dz {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; min-height: 260px; padding: 44px 24px; text-align: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+    cursor: pointer; transition: background .18s, border-color .18s;
+  }
+  .dz:hover { border-color: var(--line-strong); }
+  .dz:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .dz.over { background: var(--accent-soft); border-color: var(--accent); }
+  .dz .c {
+    position: absolute; width: 28px; height: 28px;
+    border: 2px solid var(--line-strong);
+    transition: transform .18s ease, border-color .18s;
+    pointer-events: none;
+  }
+  .dz .tl { top: 14px; left: 14px; border-right: 0; border-bottom: 0; border-top-left-radius: 8px; }
+  .dz .tr { top: 14px; right: 14px; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; }
+  .dz .bl { bottom: 14px; left: 14px; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; }
+  .dz .br { bottom: 14px; right: 14px; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
+  .dz.over .c { border-color: var(--accent); }
+  .dz.over .tl { transform: translate(10px, 10px); }
+  .dz.over .tr { transform: translate(-10px, 10px); }
+  .dz.over .bl { transform: translate(10px, -10px); }
+  .dz.over .br { transform: translate(-10px, -10px); }
+  .dz .up { width: 44px; height: 44px; color: var(--accent); margin-bottom: 8px; }
+  .dz h2 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }
+  .dz p { margin: 0; color: var(--muted); }
+  .dz .btn { margin-top: 16px; }
+  .dz .types { margin-top: 14px; font-size: .85rem; }
+
+  .notice {
+    margin: 14px 0 0; padding: 10px 14px; border-radius: 10px;
+    background: var(--warn-soft); color: var(--warn); font-size: .92rem; font-weight: 500;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 18px; border: 1px solid transparent; border-radius: 10px;
+    font-family: inherit; font-size: .95rem; font-weight: 600; line-height: 1.1;
+    text-decoration: none; cursor: pointer; transition: background .15s, border-color .15s, filter .15s;
+  }
+  .btn svg { width: 16px; height: 16px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { filter: brightness(.92); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+  .btn.ghost:hover { background: var(--surface); }
+  .btn:focus-visible, .x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn[disabled] { opacity: .6; cursor: progress; }
+
+  /* Results */
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 32px 0 12px; }
+  .bar h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+  .bar .btns { display: flex; gap: 8px; }
+  .bar .btn { padding: 9px 14px; font-size: .9rem; }
+
+  .list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .row {
+    display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 16px; align-items: center;
+    padding: 12px 14px 12px 12px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  }
+  .thumb {
+    width: 64px; height: 64px; border-radius: 10px; overflow: hidden;
+    display: grid; place-items: center; background: var(--bg);
+  }
+  .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .fname { margin: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dims { margin: 0; font-size: .82rem; color: var(--muted); }
+  .sizes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin-top: 8px; }
+  .size { display: flex; flex-direction: column; line-height: 1.25; }
+  .size small { font-size: .78rem; color: var(--muted); }
+  .size strong { font-size: 1.1rem; font-weight: 700; }
+  .pill {
+    padding: 3px 10px; border-radius: 99px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: .8rem; font-weight: 600;
+  }
+  .pill.larger { background: var(--warn-soft); color: var(--warn); }
+  .busy { display: flex; align-items: center; gap: 8px; font-size: .92rem; color: var(--muted); }
+  .err { margin: 0; font-size: .9rem; color: var(--danger); }
+  .act { display: flex; align-items: center; gap: 6px; }
+  .x {
+    display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+    background: transparent; border: 0; border-radius: 8px; color: var(--muted); cursor: pointer;
+  }
+  .x:hover { background: var(--bg); color: var(--ink); }
+  .x svg { width: 18px; height: 18px; }
+
+  .spin {
+    display: inline-block; width: 18px; height: 18px; flex: none;
+    border: 2px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spin { animation-duration: 2.4s; }
+    .dz, .dz .c, .btn, .seg span { transition: none; }
+  }
+
+  footer { margin-top: 44px; font-size: .85rem; color: var(--muted); }
+  footer p { margin: 0 0 14px; }
+  .credit {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px;
+    border: 1px solid var(--line-strong); border-radius: 99px;
+    color: var(--ink); font-size: .9rem; font-weight: 600; text-decoration: none;
+    transition: background .15s;
+  }
+  .credit:hover { background: var(--surface); }
+  .credit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .credit svg { width: 18px; height: 18px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (max-width: 560px) {
+    .options { gap: 14px; }
+    .group { flex-wrap: wrap; }
+    .row { grid-template-columns: 56px minmax(0, 1fr); gap: 12px; }
+    .thumb { width: 56px; height: 56px; }
+    .act { grid-column: 1 / -1; }
+    .act .btn.primary { flex: 1; }
+    .dz { min-height: 230px; padding: 36px 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="var(--accent)"/>
+      <path d="M9 13V9h4M23 13V9h-4M9 19v4h4M23 19v4h-4" stroke="var(--accent-ink)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1>Image converter</h1>
+  </header>
+  <p class="lede">Convert HEIC, PNG, WebP, GIF and other images to JPG or another format. Everything happens in your browser, so your files never leave your device.</p>
+
+  <div class="options">
+    <div class="group">
+      <span class="label" id="fmt-label">Convert to</span>
+      <div class="seg" role="radiogroup" aria-labelledby="fmt-label">
+        <label><input type="radio" name="fmt" value="jpg" checked><span>JPG</span></label>
+        <label><input type="radio" name="fmt" value="png"><span>PNG</span></label>
+        <label><input type="radio" name="fmt" value="webp"><span>WebP</span></label>
+        <label><input type="radio" name="fmt" value="avif"><span>AVIF</span></label>
+        <label><input type="radio" name="fmt" value="bmp"><span>BMP</span></label>
+      </div>
+    </div>
+    <div class="group quality" id="quality-group">
+      <label class="label" for="quality">Quality</label>
+      <input type="range" id="quality" min="40" max="100" step="1" value="90">
+      <output id="quality-out" for="quality">90%</output>
+    </div>
+  </div>
+  <p class="hint" id="hint"></p>
+
+  <div class="dz" id="dz" role="button" tabindex="0" aria-label="Drop images here or choose files">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <svg class="up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/>
+      <path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/>
+    </svg>
+    <h2>Drop images here</h2>
+    <p>Select as many files as you like, or paste from your clipboard</p>
+    <span class="btn primary">Choose files</span>
+    <p class="types">HEIC, HEIF, PNG, JPG, WebP, GIF, BMP, AVIF, SVG</p>
+  </div>
+  <input type="file" id="file" multiple hidden accept="image/*,.heic,.heif,.hif,.avif,.bmp,.tif,.tiff,.ico,.svg,.webp,.gif,.png,.jpg,.jpeg,.jfif">
+  <div class="notice" id="notice" role="status" hidden></div>
+
+  <div class="bar" id="bar" hidden>
+    <h2 id="count">0 files</h2>
+    <div class="btns">
+      <button class="btn ghost" id="add" type="button">Add more files</button>
+      <button class="btn primary" id="zip" type="button" hidden>Download all as ZIP</button>
+      <button class="btn ghost" id="clear" type="button">Clear all</button>
+    </div>
+  </div>
+  <ul class="list" id="list"></ul>
+  <div class="sr" id="live" aria-live="polite"></div>
+
+  <footer>
+    <p>Nothing is uploaded. Files are converted in this browser tab and stay on your device.</p>
+    <a class="credit" href="https://github.com/9Onewave" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      Created by 9Onewave
+    </a>
+  </footer>
+  <noscript><p class="notice">This converter needs JavaScript to run.</p></noscript>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const HEIC_URL = 'https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js';
+  const ZIP_URL  = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+
+  const FORMATS = {
+    jpg:  { label: 'JPG',  mime: 'image/jpeg', ext: 'jpg',  lossy: true,  hint: 'Best for photos. Transparent areas become white.' },
+    png:  { label: 'PNG',  mime: 'image/png',  ext: 'png',  lossy: false, hint: 'Lossless and keeps transparency. Files are often larger than JPG.' },
+    webp: { label: 'WebP', mime: 'image/webp', ext: 'webp', lossy: true,  hint: 'Smaller than JPG at similar quality. Keeps transparency.' },
+    avif: { label: 'AVIF', mime: 'image/avif', ext: 'avif', lossy: true,  hint: 'Very small files, but conversion is slower.' },
+    bmp:  { label: 'BMP',  mime: 'image/bmp',  ext: 'bmp',  lossy: false, hint: 'Uncompressed, so files are large. Transparent areas become white.' }
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const dz = $('dz'), input = $('file'), list = $('list'), bar = $('bar'), count = $('count');
+  const zipBtn = $('zip'), clearBtn = $('clear'), notice = $('notice'), live = $('live');
+  const qualityGroup = $('quality-group'), qualityInput = $('quality'), qualityOut = $('quality-out'), hint = $('hint');
+
+  const state = { format: 'jpg', quality: 0.9 };
+  const items = [];
+  let nextId = 1;
+  let pipeline = Promise.resolve();
+
+  /* ---------- helpers ---------- */
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const extOf = (name) => { const m = name.match(/\.([^./\\]+)$/); return m ? m[1].toLowerCase() : ''; };
+  const IMAGE_EXT = ['heic','heif','hif','avif','bmp','tif','tiff','ico','svg','webp','gif','png','jpg','jpeg','jfif'];
+  const isHeic = (f) => /^image\/hei[cf]/.test(f.type) || ['heic','heif','hif'].includes(extOf(f.name));
+  const isImage = (f) => f.type.startsWith('image/') || IMAGE_EXT.includes(extOf(f.name));
+  const outName = (name, key) => (name.replace(/\.[^./\\]+$/, '') || 'image') + '.' + FORMATS[key].ext;
+  const srcW = (s) => s.naturalWidth || s.width || 1024;
+  const srcH = (s) => s.naturalHeight || s.height || 1024;
+  const friendly = (msg) => Object.assign(new Error(msg), { friendly: true });
+
+  function fmtSize(b) {
+    if (b < 1024) return b + ' B';
+    const kb = b / 1024;
+    if (kb < 1024) return (kb < 10 ? kb.toFixed(1) : Math.round(kb)) + ' KB';
+    const mb = kb / 1024;
+    return (mb < 10 ? mb.toFixed(2) : mb.toFixed(1)) + ' MB';
+  }
+
+  const loaded = {};
+  function loadScript(url) {
+    if (!loaded[url]) {
+      loaded[url] = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+        s.onload = resolve;
+        s.onerror = () => { delete loaded[url]; reject(friendly('Could not load a required library. Check your connection and try again.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return loaded[url];
+  }
+
+  let noticeTimer;
+  function notify(msg) {
+    notice.textContent = msg;
+    notice.hidden = false;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => { notice.hidden = true; }, 6000);
+  }
+
+  /* ---------- decoding ---------- */
+  async function decodeNative(blob) {
+    if ('createImageBitmap' in window) {
+      try { return await createImageBitmap(blob); } catch (e) { /* fall back to <img> */ }
+    }
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+
+  async function decode(file) {
+    try {
+      return await decodeNative(file);
+    } catch (e) {
+      if (!isHeic(file)) throw friendly('This file could not be read. It may be corrupted or in a format your browser does not support.');
+    }
+    await loadScript(HEIC_URL);
+    try {
+      let out = await window.heic2any({ blob: file, toType: 'image/png' });
+      if (Array.isArray(out)) out = out[0];
+      return await decodeNative(out);
+    } catch (e) {
+      throw friendly('This HEIC file could not be read. It may be corrupted or use an unsupported variant.');
+    }
+  }
+
+  /* ---------- encoding ---------- */
+  function encodeBMP(ctx, w, h) {
+    const { data } = ctx.getImageData(0, 0, w, h);
+    const rowSize = Math.ceil((w * 3) / 4) * 4;
+    const size = 54 + rowSize * h;
+    const buf = new ArrayBuffer(size);
+    const v = new DataView(buf);
+    v.setUint8(0, 0x42); v.setUint8(1, 0x4D);
+    v.setUint32(2, size, true);
+    v.setUint32(10, 54, true);
+    v.setUint32(14, 40, true);
+    v.setInt32(18, w, true);
+    v.setInt32(22, h, true);
+    v.setUint16(26, 1, true);
+    v.setUint16(28, 24, true);
+    v.setUint32(34, rowSize * h, true);
+    v.setInt32(38, 2835, true);
+    v.setInt32(42, 2835, true);
+    const px = new Uint8Array(buf, 54);
+    for (let y = 0; y < h; y++) {
+      let s = (h - 1 - y) * w * 4;
+      let d = y * rowSize;
+      for (let x = 0; x < w; x++, s += 4) {
+        px[d++] = data[s + 2];
+        px[d++] = data[s + 1];
+        px[d++] = data[s];
+      }
+    }
+    return new Blob([buf], { type: 'image/bmp' });
+  }
+
+  async function encode(src, key, quality) {
+    const f = FORMATS[key];
+    const w = srcW(src), h = srcH(src);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: key === 'bmp' });
+    if (!ctx) throw friendly('This image is too large for your browser to convert.');
+    if (key === 'jpg' || key === 'bmp') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(src, 0, 0, w, h);
+    let blob;
+    try {
+      blob = key === 'bmp'
+        ? encodeBMP(ctx, w, h)
+        : await new Promise((res) => canvas.toBlob(res, f.mime, f.lossy ? quality : undefined));
+    } finally {
+      canvas.width = canvas.height = 0;
+    }
+    if (!blob) throw friendly('This image is too large for your browser to convert.');
+    if (blob.type !== f.mime) throw friendly(f.label + ' is not supported in this browser. Try JPG or PNG instead.');
+    return blob;
+  }
+
+  function makeThumb(src) {
+    const S = 128, w = srcW(src), h = srcH(src);
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const ctx = c.getContext('2d');
+    const k = Math.max(S / w, S / h);
+    const dw = w * k, dh = h * k;
+    ctx.drawImage(src, (S - dw) / 2, (S - dh) / 2, dw, dh);
+    return c.toDataURL('image/webp', 0.8);
+  }
+
+  /* ---------- queue ---------- */
+  function schedule(it) {
+    if (it.fatal || it.removed) return;
+    it.dirty = true;
+    pipeline = pipeline.then(() => run(it)).catch(() => {});
+  }
+
+  async function run(it) {
+    if (it.removed || !it.dirty || it.fatal) return;
+    it.dirty = false;
+    it.status = 'working';
+    render(it);
+    await new Promise((r) => setTimeout(r, 30)); // let the UI paint
+    try {
+      if (!it.src) {
+        it.src = await decode(it.file);
+        it.w = srcW(it.src); it.h = srcH(it.src);
+        it.thumb = makeThumb(it.src);
+      }
+      const key = state.format;
+      const blob = await encode(it.src, key, state.quality);
+      if (it.removed) return;
+      if (it.result) URL.revokeObjectURL(it.result.url);
+      it.result = { key, blob, url: URL.createObjectURL(blob), name: outName(it.file.name, key) };
+      it.status = 'done';
+      live.textContent = 'Converted ' + it.result.name + ', ' + fmtSize(blob.size);
+    } catch (err) {
+      if (!it.src) it.fatal = true;
+      it.status = 'error';
+      it.error = err && err.friendly ? err.message : 'This file could not be converted.';
+    }
+    if (!it.removed) render(it);
+    updateBar();
+  }
+
+  /* ---------- rendering ---------- */
+  const ICON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 11 12 15.5 16.5 11M5 20h14"/></svg>';
+  const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+
+  function render(it) {
+    if (!it.el) {
+      it.el = document.createElement('li');
+      it.el.className = 'row';
+      it.el.dataset.id = it.id;
+      list.appendChild(it.el);
+    }
+    const r = it.result;
+    const orig = fmtSize(it.file.size);
+    const removeBtn = '<button class="x" type="button" data-remove aria-label="Remove ' + esc(it.file.name) + '">' + ICON_X + '</button>';
+    const thumb = it.thumb ? '<img src="' + it.thumb + '" alt="">' : '<span class="spin" aria-hidden="true"></span>';
+    const dims = it.w ? it.w + ' × ' + it.h + ' px' : '&nbsp;';
+    let name, sizes, act;
+
+    if (it.status === 'error') {
+      name = it.file.name;
+      sizes = '<div class="size"><small>Original</small><strong>' + orig + '</strong></div><p class="err">' + esc(it.error) + '</p>';
+      act = removeBtn;
+    } else if (it.status === 'done' && r) {
+      name = r.name;
+      const diff = (r.blob.size - it.file.size) / it.file.size;
+      const pct = Math.round(Math.abs(diff) * 100);
+      const pill = pct === 0 ? 'About the same size' : (diff < 0 ? pct + '% smaller' : pct + '% larger');
+      sizes =
+        '<div class="size"><small>Original</small><strong>' + orig + '</strong></div>' +
+        '<div class="size"><small>Converted to ' + FORMATS[r.key].label + '</small><strong>' + fmtSize(r.blob.size) + '</strong></div>' +
+        '<span class="pill' + (diff > 0 && pct > 0 ? ' larger' : '') + '">' + pill + '</span>';
+      act = '<a class="btn primary" href="' + r.url + '" download="' + esc(r.name) + '">' + ICON_DOWN + 'Download</a>' + removeBtn;
+    } else {
+      name = outName(it.file.name, state.format);
+      sizes =
+        '<div class="size"><small>Original</small><strong>' + orig + '</strong></div>' +
+        '<div class="busy"><span class="spin" aria-hidden="true"></span>Converting…</div>';
+      act = removeBtn;
+    }
+
+    it.el.innerHTML =
+      '<div class="thumb">' + thumb + '</div>' +
+      '<div class="info">' +
+        '<p class="fname" title="' + esc(name) + '">' + esc(name) + '</p>' +
+        '<p class="dims">' + dims + '</p>' +
+        '<div class="sizes">' + sizes + '</div>' +
+      '</div>' +
+      '<div class="act">' + act + '</div>';
+  }
+
+  function updateBar() {
+    const n = items.length;
+    const done = items.filter((i) => i.status === 'done').length;
+    bar.hidden = n === 0;
+    count.textContent = n === 1 ? '1 file' : n + ' files';
+    zipBtn.hidden = done < 2;
+  }
+
+  /* ---------- adding & removing ---------- */
+  function addFiles(fileList) {
+    const files = Array.from(fileList || []);
+    const skipped = [];
+    for (const f of files) {
+      if (!isImage(f)) { skipped.push(f.name); continue; }
+      const it = { id: nextId++, file: f, src: null, thumb: null, w: 0, h: 0, result: null,
+                   status: 'queued', error: '', dirty: false, fatal: false, removed: false, el: null };
+      items.push(it);
+      render(it);
+      schedule(it);
+    }
+    if (skipped.length) {
+      notify(skipped.length === 1
+        ? skipped[0] + ' is not an image, so it was skipped.'
+        : skipped.length + ' files were skipped because they are not images.');
+    }
+    updateBar();
+  }
+
+  function removeItem(it) {
+    it.removed = true;
+    if (it.result) URL.revokeObjectURL(it.result.url);
+    if (it.src && typeof it.src.close === 'function') it.src.close();
+    if (it.el) it.el.remove();
+    const i = items.indexOf(it);
+    if (i > -1) items.splice(i, 1);
+    updateBar();
+  }
+
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-remove]');
+    if (!btn) return;
+    const id = Number(btn.closest('li').dataset.id);
+    const it = items.find((x) => x.id === id);
+    if (it) removeItem(it);
+  });
+  clearBtn.addEventListener('click', () => { items.slice().forEach(removeItem); });
+  $('add').addEventListener('click', () => input.click());
+
+  /* ---------- ZIP ---------- */
+  zipBtn.addEventListener('click', async () => {
+    const label = zipBtn.textContent;
+    zipBtn.disabled = true;
+    zipBtn.textContent = 'Preparing ZIP…';
+    try {
+      await loadScript(ZIP_URL);
+      const zip = new window.JSZip();
+      const used = new Set();
+      for (const it of items) {
+        if (it.status !== 'done' || !it.result) continue;
+        let name = it.result.name, n = 1;
+        while (used.has(name.toLowerCase())) {
+          const dot = it.result.name.lastIndexOf('.');
+          name = it.result.name.slice(0, dot) + ' (' + (n++) + ')' + it.result.name.slice(dot);
+        }
+        used.add(name.toLowerCase());
+        zip.file(name, it.result.blob);
+      }
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'converted-images.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch (err) {
+      notify(err && err.friendly ? err.message : 'Could not create the ZIP file.');
+    } finally {
+      zipBtn.disabled = false;
+      zipBtn.textContent = label;
+    }
+  });
+
+  /* ---------- options ---------- */
+  function syncOptions() {
+    const f = FORMATS[state.format];
+    qualityGroup.hidden = !f.lossy;
+    hint.textContent = f.hint;
+  }
+
+  document.querySelectorAll('input[name="fmt"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      state.format = radio.value;
+      syncOptions();
+      items.forEach(schedule);
+    });
+  });
+
+  let qTimer;
+  qualityInput.addEventListener('input', () => {
+    qualityOut.textContent = qualityInput.value + '%';
+    state.quality = Number(qualityInput.value) / 100;
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => { if (FORMATS[state.format].lossy) items.forEach(schedule); }, 250);
+  });
+
+  // Disable formats this browser cannot encode (Safari and Firefox lack AVIF, older Safari lacks WebP).
+  (async function detectSupport() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    for (const key of ['webp', 'avif']) {
+      const ok = await new Promise((res) => c.toBlob((b) => res(!!b && b.type === FORMATS[key].mime), FORMATS[key].mime));
+      if (!ok) {
+        const r = document.querySelector('input[name="fmt"][value="' + key + '"]');
+        r.disabled = true;
+        r.parentElement.title = FORMATS[key].label + ' is not supported in this browser';
+      }
+    }
+  })();
+
+  /* ---------- drop, click, paste ---------- */
+  dz.addEventListener('click', () => input.click());
+  dz.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+  let depth = 0;
+  window.addEventListener('dragenter', (e) => { if (hasFiles(e)) { e.preventDefault(); depth++; dz.classList.add('over'); } });
+  window.addEventListener('dragover',  (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+  window.addEventListener('dragleave', (e) => {
+    if (hasFiles(e)) { depth = Math.max(0, depth - 1); if (!depth) dz.classList.remove('over'); }
+  });
+  window.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    depth = 0;
+    dz.classList.remove('over');
+    addFiles(e.dataTransfer.files);
+  });
+  window.addEventListener('paste', (e) => {
+    const files = e.clipboardData ? Array.from(e.clipboardData.files || []) : [];
+    if (files.length) { e.preventDefault(); addFiles(files); }
+  });
+
+  syncOptions();
+})();
+</script>
+</body>
+</html>
